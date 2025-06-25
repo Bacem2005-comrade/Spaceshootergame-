@@ -2,7 +2,8 @@
 
 Простая, но увлекательная аркадная игра-шутер, написанная на Pygame.
 
-![Uploading image.png…]()
+![image](https://github.com/user-attachments/assets/6818758d-7957-40a7-8815-fccb8d750b0d)
+
 
 
 ## Описание игры
