@@ -1,28 +1,19 @@
-# Космическая Битва
+# Space-Attack-Game-Python-Pygame
+Space attack Game developed Using the Python's pygame library
 
-Простая, но увлекательная аркадная игра-шутер, написанная на Pygame.
+## Features :
 
-![image](https://github.com/user-attachments/assets/6818758d-7957-40a7-8815-fccb8d750b0d)
+  * A Spaceship which you can operate through the arrow keys (Left/Right)
+  * Spaceship Fires a Bullet using the Spacebar Key
+  * Multiple aliens/enemies to shoot
+  * Score +1 for every shoot
+  * Displays Score
+  * Beautiful Graphics and Sound Effect
+  * Game ends When one of the alien moves down near the players Spaceship
 
+# Notes :
 
-
-## Описание игры
-Управляйте космическим кораблём и защищайтесь от атак инопланетян. Уничтожайте врагов, чтобы зарабатывать очки, но не позволяйте им достичь нижней части экрана!
-
-## Управление
-
-| Клавиша       | Действие                          |
-|---------------|-----------------------------------|
-| **← →**       | Движение влево и вправо          |
-| **ПРОБЕЛ**    | Стрельба                         |
-| **R**         | Перезапуск игры (при поражении)  |
-| **ESC**       | Выход из игры                    |
-
-## Особенности
-- Корабль игрока с плавным управлением
-- Увеличение сложности по мере прогресса
-- Подсчёт очков
-- Звуковые эффекты (выстрелы, взрывы)
-- Фоновая музыка
-- Визуальные эффекты попаданий
-- Экран поражения с возможностью перезапуска
+  * To download the Pygame library simply type : **pip install pygame** in cmd or terminal.
+  * Make sure to add all the Images, sounds (.wav) files in the same directory in which the main game file **space_attack.py** file is saved.
+  * To enable the background music simply remove the comments from two lines of code under the Backround Music Comment.
+  
