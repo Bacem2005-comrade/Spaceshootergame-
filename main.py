@@ -3,225 +3,256 @@ import sys
 import random
 import math
 from pygame import mixer
+from typing import List, Tuple, Optional
 
-# Initialize PyGame
-pygame.init()
+# Constants (PEP 8: UPPER_CASE)
+SCREEN_WIDTH = 800
+SCREEN_HEIGHT = 600
+FPS = 60
+PLAYER_SPEED = 5
+BULLET_SPEED = 10
+ENEMY_SPEED = 2
+ENEMY_SPAWN_TIME = 1000  # ms
 
-# Set up the game window
-screen_width = 800
-screen_height = 600
-screen = pygame.display.set_mode((screen_width, screen_height))
-pygame.display.set_caption("Space Attack")
-
-# Set the frame rate
-clock = pygame.time.Clock()
-
-# Load images with error handling
-try:
-    # Background
-    background = pygame.image.load('bg.jpg')
-    background = pygame.transform.scale(background, (screen_width, screen_height))
-except:
-    print("Could not load background image. Using black background.")
-    background = None
-
-try:
-    # Player
-    player_img = pygame.image.load('player_spaceship.png')
-    player_img = pygame.transform.scale(player_img, (50, 60))
-except:
-    print("Could not load player image. Using rectangle instead.")
-    player_img = None
-
-try:
-    # Enemy
-    enemy_img = pygame.image.load('alien.png')
-    enemy_img = pygame.transform.scale(enemy_img, (50, 60))
-except:
-    print("Could not load enemy image. Using rectangle instead.")
-    enemy_img = None
-
-try:
-    # Bullet - made larger for better visibility
-    bullet_img = pygame.image.load('bullet.png')
-    bullet_img = pygame.transform.scale(bullet_img, (10, 20))  # Increased size
-except:
-    print("Could not load bullet image. Using rectangle instead.")
-    bullet_img = None
-
-# Load sounds
-try:
-    mixer.music.load('background.wav')
-    mixer.music.set_volume(0.5)
-    mixer.music.play(-1)
-except:
-    print("Could not load background music.")
-
-try:
-    laser_sound = mixer.Sound('laser.wav')
-    explosion_sound = mixer.Sound('explosion.wav')
-except:
-    print("Could not load sound effects.")
-    laser_sound = None
-    explosion_sound = None
-
-# Game state
-def init_game():
-    global player_x, player_y, bullets, enemies, score, game_over, enemy_timer
+class GameObject:
+    """Base class for all game objects (player, enemies, bullets)."""
     
-    # Player settings
-    player_x = screen_width // 2 - player_width // 2
-    player_y = screen_height - player_height - 10
+    def __init__(self, x: int, y: int, width: int, height: int, image_path: Optional[str] = None):
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = height
+        self.image = self._load_image(image_path) if image_path else None
+
+    def _load_image(self, path: str) -> Optional[pygame.Surface]:
+        """Load and scale an image with error handling."""
+        try:
+            img = pygame.image.load(path)
+            return pygame.transform.scale(img, (self.width, self.height))
+        except Exception as e:
+            print(f"Error loading image: {e}. Using placeholder.")
+            return None
+
+    def draw(self, screen: pygame.Surface) -> None:
+        """Draw the object (image or rectangle)."""
+        if self.image:
+            screen.blit(self.image, (self.x, self.y))
+        else:
+            pygame.draw.rect(screen, self.color, (self.x, self.y, self.width, self.height))
+
+    def get_rect(self) -> pygame.Rect:
+        """Return collision rectangle."""
+        return pygame.Rect(self.x, self.y, self.width, self.height)
+
+class Player(GameObject):
+    """Player spaceship controlled by arrow keys."""
     
-    # Bullet settings
-    bullets = []
-    
-    # Enemy settings
-    enemies = []
-    enemy_timer = pygame.time.get_ticks()
-    
-    # Score
-    score = 0
-    
-    # Game over flag
-    game_over = False
+    def __init__(self):
+        super().__init__(
+            x=SCREEN_WIDTH // 2 - 25,
+            y=SCREEN_HEIGHT - 70,
+            width=50,
+            height=60,
+            image_path="player_spaceship.png"
+        )
+        self.color = (0, 128, 255)  # Blue fallback
+        self.speed = PLAYER_SPEED
 
-# Initialize game for the first time
-player_width = 50
-player_height = 60
-player_speed = 5
-bullet_width = 10  # Increased size
-bullet_height = 20  # Increased size
-bullet_speed = 10
-enemy_width = 50
-enemy_height = 60
-enemy_speed = 2
-enemy_spawn_time = 1000  # 1 second
-
-init_game()
-
-# Fonts
-font = pygame.font.Font(None, 36)
-game_over_font = pygame.font.Font(None, 72)
-restart_font = pygame.font.Font(None, 48)
-
-def draw_player(x, y):
-    if player_img:
-        screen.blit(player_img, (x, y))
-    else:
-        pygame.draw.rect(screen, (0, 128, 255), (x, y, player_width, player_height))
-
-def draw_enemy(x, y):
-    if enemy_img:
-        screen.blit(enemy_img, (x, y))
-    else:
-        pygame.draw.rect(screen, (255, 0, 0), (x, y, enemy_width, enemy_height))
-
-def draw_bullet(x, y):
-    if bullet_img:
-        screen.blit(bullet_img, (x, y))
-    else:
-        pygame.draw.rect(screen, (255, 255, 0), (x, y, bullet_width, bullet_height))  # Yellow for visibility
-
-def show_score():
-    score_text = font.render(f"Score: {score}", True, (255, 255, 255))
-    screen.blit(score_text, (10, 10))
-
-def show_game_over():
-    game_over_text = game_over_font.render("GAME OVER", True, (255, 0, 0))
-    screen.blit(game_over_text, (screen_width//2 - 150, screen_height//2 - 50))
-    
-    restart_text = restart_font.render("Press R to restart", True, (255, 255, 255))
-    screen.blit(restart_text, (screen_width//2 - 120, screen_height//2 + 20))
-
-def check_collision(bullet_x, bullet_y, enemy_x, enemy_y):
-    # Using rectangular collision for better accuracy with the larger bullet
-    bullet_rect = pygame.Rect(bullet_x, bullet_y, bullet_width, bullet_height)
-    enemy_rect = pygame.Rect(enemy_x, enemy_y, enemy_width, enemy_height)
-    return bullet_rect.colliderect(enemy_rect)
-
-# Main game loop
-running = True
-while running:
-    # Event handling
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            running = False
-        if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_ESCAPE:
-                running = False
-            if event.key == pygame.K_SPACE and not game_over:
-                # Fire bullet from center of player
-                bullet_x = player_x + player_width // 2 - bullet_width // 2
-                bullet_y = player_y
-                bullets.append([bullet_x, bullet_y])
-                if laser_sound:
-                    laser_sound.play()
-            if event.key == pygame.K_r and game_over:
-                init_game()  # Reset game when R is pressed
-
-    if not game_over:
-        # Player movement
+    def update(self) -> None:
+        """Move player based on keyboard input."""
         keys = pygame.key.get_pressed()
-        if keys[pygame.K_LEFT] and player_x > 0:
-            player_x -= player_speed
-        if keys[pygame.K_RIGHT] and player_x < screen_width - player_width:
-            player_x += player_speed
+        if keys[pygame.K_LEFT] and self.x > 0:
+            self.x -= self.speed
+        if keys[pygame.K_RIGHT] and self.x < SCREEN_WIDTH - self.width:
+            self.x += self.speed
 
+class Enemy(GameObject):
+    """Enemy spaceship that moves downward."""
+    
+    def __init__(self, x: int):
+        super().__init__(
+            x=x,
+            y=-60,
+            width=50,
+            height=60,
+            image_path="alien.png"
+        )
+        self.color = (255, 0, 0)  # Red fallback
+        self.speed = ENEMY_SPEED
+
+    def update(self) -> bool:
+        """Move enemy. Returns True if it reached the bottom."""
+        self.y += self.speed
+        return self.y > SCREEN_HEIGHT
+
+class Bullet(GameObject):
+    """Bullet fired by the player."""
+    
+    def __init__(self, x: int, y: int):
+        super().__init__(
+            x=x,
+            y=y,
+            width=10,
+            height=20,
+            image_path="bullet.png"
+        )
+        self.color = (255, 255, 0)  # Yellow fallback
+        self.speed = BULLET_SPEED
+
+    def update(self) -> bool:
+        """Move bullet. Returns True if off-screen."""
+        self.y -= self.speed
+        return self.y < 0
+
+class Game:
+    """Main game controller."""
+    
+    def __init__(self):
+        pygame.init()
+        self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+        pygame.display.set_caption("Space Attack")
+        self.clock = pygame.time.Clock()
+        self.font = pygame.font.Font(None, 36)
+        self.game_over_font = pygame.font.Font(None, 72)
+        self.background = self._load_background()
+        self.sounds = self._load_sounds()
+        self.reset()
+
+    def _load_background(self) -> Optional[pygame.Surface]:
+        """Load background image."""
+        try:
+            bg = pygame.image.load('bg.jpg')
+            return pygame.transform.scale(bg, (SCREEN_WIDTH, SCREEN_HEIGHT))
+        except:
+            return None
+
+    def _load_sounds(self) -> dict:
+        """Load all sound effects."""
+        sounds = {}
+        try:
+            mixer.music.load('background.wav')
+            mixer.music.set_volume(0.5)
+            sounds['background'] = True
+        except:
+            print("Could not load background music.")
+        
+        try:
+            sounds['laser'] = mixer.Sound('laser.wav')
+            sounds['explosion'] = mixer.Sound('explosion.wav')
+        except:
+            print("Could not load sound effects.")
+        return sounds
+
+    def reset(self) -> None:
+        """Reset game state."""
+        self.player = Player()
+        self.bullets: List[Bullet] = []
+        self.enemies: List[Enemy] = []
+        self.score = 0
+        self.game_over = False
+        self.enemy_timer = pygame.time.get_ticks()
+        if 'background' in self.sounds:
+            mixer.music.play(-1)
+
+    def handle_events(self) -> None:
+        """Process keyboard and window events."""
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
+                pygame.quit()
+                sys.exit()
+            
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_SPACE and not self.game_over:
+                    self._fire_bullet()
+                if event.key == pygame.K_r and self.game_over:
+                    self.reset()
+
+    def _fire_bullet(self) -> None:
+        """Create a new bullet at player's position."""
+        bullet = Bullet(
+            x=self.player.x + self.player.width // 2 - 5,
+            y=self.player.y
+        )
+        self.bullets.append(bullet)
+        if 'laser' in self.sounds:
+            self.sounds['laser'].play()
+
+    def update(self) -> None:
+        """Update game state."""
+        if self.game_over:
+            return
+
+        self.player.update()
+        
         # Spawn enemies
-        current_time = pygame.time.get_ticks()
-        if current_time - enemy_timer > enemy_spawn_time:
-            enemy_x = random.randint(0, screen_width - enemy_width)
-            enemy_y = -enemy_height
-            enemies.append([enemy_x, enemy_y, random.choice([-1, 1]) * enemy_speed])
-            enemy_timer = current_time
+        if pygame.time.get_ticks() - self.enemy_timer > ENEMY_SPAWN_TIME:
+            self.enemies.append(Enemy(random.randint(0, SCREEN_WIDTH - 50)))
+            self.enemy_timer = pygame.time.get_ticks()
 
         # Update bullets
-        for bullet in bullets[:]:
-            bullet[1] -= bullet_speed
-            if bullet[1] < 0:
-                bullets.remove(bullet)
+        for bullet in self.bullets[:]:
+            if bullet.update():  # If bullet is off-screen
+                self.bullets.remove(bullet)
 
         # Update enemies and check collisions
-        for enemy in enemies[:]:
-            enemy[1] += enemy_speed
+        for enemy in self.enemies[:]:
+            if enemy.update():  # If enemy reached bottom
+                self.game_over = True
             
-            # Check if enemy reached bottom
-            if enemy[1] > screen_height - 50:
-                game_over = True
-            
-            # Check for bullet collisions
-            for bullet in bullets[:]:
-                if check_collision(bullet[0], bullet[1], enemy[0], enemy[1]):
-                    if explosion_sound:
-                        explosion_sound.play()
-                    bullets.remove(bullet)
-                    enemies.remove(enemy)
-                    score += 1
+            for bullet in self.bullets[:]:
+                if bullet.get_rect().colliderect(enemy.get_rect()):
+                    if 'explosion' in self.sounds:
+                        self.sounds['explosion'].play()
+                    self.bullets.remove(bullet)
+                    self.enemies.remove(enemy)
+                    self.score += 1
                     break
 
-    # Draw everything
-    if background:
-        screen.blit(background, (0, 0))
-    else:
-        screen.fill((0, 0, 0))
+    def draw(self) -> None:
+        """Render all game objects."""
+        if self.background:
+            self.screen.blit(self.background, (0, 0))
+        else:
+            self.screen.fill((0, 0, 0))
 
-    for bullet in bullets:
-        draw_bullet(bullet[0], bullet[1])
+        for bullet in self.bullets:
+            bullet.draw(self.screen)
 
-    for enemy in enemies:
-        draw_enemy(enemy[0], enemy[1])
+        for enemy in self.enemies:
+            enemy.draw(self.screen)
 
-    draw_player(player_x, player_y)
-    show_score()
-    
-    if game_over:
-        show_game_over()
+        self.player.draw(self.screen)
+        self._draw_score()
+        
+        if self.game_over:
+            self._draw_game_over()
 
-    pygame.display.flip()
-    clock.tick(60)
+        pygame.display.flip()
 
-pygame.quit()
-sys.exit()
+    def _draw_score(self) -> None:
+        """Render the score text."""
+        score_text = self.font.render(f"Score: {self.score}", True, (255, 255, 255))
+        self.screen.blit(score_text, (10, 10))
+
+    def _draw_game_over(self) -> None:
+        """Render game over screen."""
+        game_over_text = self.game_over_font.render("GAME OVER", True, (255, 0, 0))
+        self.screen.blit(game_over_text, (SCREEN_WIDTH//2 - 150, SCREEN_HEIGHT//2 - 50))
+        
+        restart_text = self.font.render("Press R to restart", True, (255, 255, 255))
+        self.screen.blit(restart_text, (SCREEN_WIDTH//2 - 100, SCREEN_HEIGHT//2 + 20))
+
+    def run(self) -> None:
+        """Main game loop."""
+        while True:
+            self.handle_events()
+            self.update()
+            self.draw()
+            self.clock.tick(FPS)
+
+if __name__ == "__main__":
+    game = Game()
+    game.run()
+
 
 
